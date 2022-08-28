@@ -1,0 +1,81 @@
+# general settings
+name: IQA_hyper_swin_eyeQ_full_ex4
+model_type: HyperIQAModel
+num_gpu: 1  # set num_gpu: 0 for cpu mode
+# manual_seed: 114514
+
+datasets:
+  test_1:
+    name: test Fundus Score
+    type: ScoreImageDataset3
+    image_folder: ./datasets/eyeq
+    csv_path: ./datasets/eyeq/Label_EyeQ_full.csv
+    io_backend:
+      type: disk
+
+    full_score: 100
+    image_size: 384
+    flip: true
+    resize: true
+    square_cut: true
+    augment_ratio: 10
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
+
+  # test_2:
+  #   name: Fundus Score Train set
+  #   type: ScoreImageDataset3
+  #   image_folder: ./datasets/data
+  #   csv_path: ./experiments/Swin_hyper_bs4_ex1/models/3_train.csv
+  #   io_backend:
+  #     type: disk
+
+  #   full_score: 100
+  #   image_size: 384
+  #   flip: false
+  #   square_cut: true
+  #   augment_ratio: 1
+  #   mean: [0.485, 0.456, 0.406]
+  #   std: [0.229, 0.224, 0.225]
+
+
+# network structures
+network_g:
+  type: HyperSwin4
+  ffa_out_ch: 32
+  tn_in_ch: 384
+  hyper_in_ch: 384
+  embed_dim: 64
+  depths: [2, 2, 6, 2]
+  num_heads: [2, 4, 8, 16]
+  window_size: 12
+  drop_rate: 0.
+  attn_drop_rate: 0.
+  drop_path_rate: 0.1
+
+# path
+path:
+  pretrain_network_g: experiments/Whole_Swinhyper_2262_64_soft_5e5(warmup)_ex5/models/net_g_42500_1.pth
+
+# validation settings
+val:
+  save_img: true
+  suffix: _ # add suffix to saved images, if None, use exp name
+
+
+  metrics:
+    L1: # metric name, can be arbitrary
+      type: calculate_l1
+      better: lower # use lower/higher to specify
+    SRCC:
+      type: calculate_srcc
+      better: higher
+    PLCC:
+      type: calculate_plcc
+      better: higher
+    RMSE:
+      type: calculate_rmse
+      better: lower
+    PRsum:
+      type: calculate_PRsum
+      better: higher

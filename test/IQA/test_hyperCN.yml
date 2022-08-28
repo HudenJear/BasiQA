@@ -1,0 +1,53 @@
+# general settings
+name: IQA_hyperCN_test_1
+model_type: HyperIQAModel
+num_gpu: 1  # set num_gpu: 0 for cpu mode
+manual_seed: 114514
+
+datasets:
+  test_1:
+    name: testFundusScore
+    type: ScoreImageDataset
+    image_folder: C:\RetianlResearch\data
+    csv_path: C:\RetianlResearch\data\score_list_new.csv
+    io_backend:
+      type: disk
+
+    full_score: 100
+    image_size: 384
+
+
+# network structures
+network_g:
+  type: HyperNetCN
+  ffa_out_ch: 32
+  tn_in_ch: 384
+  hyper_in_ch: 384
+  in_ch: 3
+  feat_size: 12
+  depths: [3, 3, 27, 3]
+  dims: [96, 192, 384, 768]
+  drop_path_rate: 0.1
+  layer_scale_init_value: !!float 1e-6
+
+# path
+path:
+  pretrain_network_g: experiments/IQA_hyper_test_1/models/net_g_150000.pth
+  strict_load_g: true
+
+# validation settings
+val:
+  save_img: true
+  suffix: _ # add suffix to saved images, if None, use exp name
+
+
+  metrics:
+    L1: # metric name, can be arbitrary
+      type: calculate_l1
+      better: lower # use lower/higher to specify
+    SRCC:
+      type: calculate_srcc
+      better: higher
+    PLCC:
+      type: calculate_plcc
+      better: higher
