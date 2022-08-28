@@ -1,0 +1,137 @@
+# general settings
+name: Swinhyper_22122_96_soft
+model_type: HyperIQAModel
+num_gpu: 1  # set num_gpu: 0 for cpu mode
+# manual_seed: 114514
+multitrain: true
+round: 6
+dataset_random_fetch: true
+random_fetch_path: ./datasets/data/score_list_new.csv
+val_ratio: 0.2
+# if dataset_random_fetch is on, the csv_path would be disbaled in the train and val phase.
+# a new csv would be created and saved in the models folder
+
+
+# dataset and data loader settings
+datasets:
+  train:
+    name: FundusIQA
+    type: ScoreImageDataset3
+    image_folder: ./datasets/data
+    csv_path: ./datasets/data/score_list_train.csv
+    io_backend:
+      type: disk
+
+    full_score: 100
+    image_size: !!int 384
+    flip: true
+    square_cut: true
+    augment_ratio: 10
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
+
+    # data loader
+    use_shuffle: true
+    num_worker_per_gpu: 4
+    batch_size_per_gpu: 16
+    dataset_enlarge_ratio: 1
+    prefetch_mode: ~
+
+  val:
+    name: testFundus
+    type: ScoreImageDataset3
+    image_folder: ./datasets/data
+    csv_path: ./datasets/data/score_list_test.csv
+    io_backend:
+      type: disk
+
+    full_score: 100
+    image_size: 384
+    flip: false
+    square_cut: true
+    augment_ratio: 10
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
+
+# network structures
+network_g:
+  type: HyperSwin4
+  ffa_out_ch: 32
+  tn_in_ch: 384
+  hyper_in_ch: 384
+  embed_dim: 96
+  depths: [2, 2, 12, 2]
+  num_heads: [3, 6, 12, 24]
+  window_size: 12
+  drop_rate: 0.
+  attn_drop_rate: 0.
+  drop_path_rate: 0.1
+
+# path
+path:
+  pretrain_network_g:
+  strict_load_g: false
+  resume_state: ~
+
+# training settings
+train:
+  ema_decay: 0.99
+  optim_g:
+    type: Adam
+    lr: !!float 2e-5
+    weight_decay: 0.
+    betas: [0.9, 0.99]
+
+  scheduler:
+    type: MultiStepLR
+    milestones: [15000, 30000, 50000, 70000]
+    gamma: 0.5
+
+  total_iter: 100000
+  warmup_iter: 1000  # -1 for no warm up
+
+  # losses
+  pixel_opt:
+    type: SmoothL1Loss
+    loss_weight: !!float 1
+    reduction: mean
+
+
+# validation settings
+val:
+  val_freq: !!float 2500
+  save_img: true
+
+  metrics:
+    # L1: # metric name, can be arbitrary
+    #   type: calculate_l1
+    #   better: lower # use lower/higher to specify
+    SRCC:
+      type: calculate_srcc
+      better: higher
+    PLCC:
+      type: calculate_plcc
+      better: higher
+    RMSE:
+      type: calculate_rmse
+      better: lower
+    PRsum:
+      type: calculate_PRsum
+      better: higher
+
+
+
+# logging settings
+logger:
+  print_freq: 2500
+  save_checkpoint_freq: !!float 2500
+  save_best: true
+  use_tb_logger: true
+  wandb:
+    project: ~
+    resume_id: ~
+
+# dist training settings
+dist_params:
+  backend: nccl
+  port: 29500
