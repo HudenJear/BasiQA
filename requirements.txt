@@ -15,3 +15,4 @@ torchvision
 tqdm
 yapf
 pandas
+SoftPool
