@@ -45,10 +45,20 @@ class ScoreImageDataset3(data.Dataset):
 
         # read csv and build a data list
         self.dt_folder = opt['image_folder']
-        raw_data = pd.read_csv(opt['csv_path'])
+        csv_path = opt['csv_path']
+        _, ext = os.path.splitext(csv_path)
+        ext = ext.lower()
+        if ext in ['.xlsx', '.xls']:
+            engine = 'openpyxl' if ext == '.xlsx' else 'xlrd'
+            raw_data = pd.read_excel(csv_path, engine=engine)
+        else:
+            raw_data = pd.read_csv(csv_path)
         pd_data = pd.DataFrame(raw_data)
         self.image_names = pd_data['file_name'].tolist()
-        self.scores = pd_data['opinion_score'].tolist()
+        if 'meanOpinionScore' in pd_data.columns:
+            self.scores = pd_data['meanOpinionScore'].tolist()
+        else:
+            self.scores = [None] * len(self.image_names)
 
         # make augment
         # directly increase the lenth of list, will effect the validation time and epochs counting
@@ -62,8 +72,9 @@ class ScoreImageDataset3(data.Dataset):
           self.scores=new_score_list
 
         # make the score in numpy format and between (0-1)
-        self.scores= np.array(self.scores)
-        self.scores = self.scores / opt['full_score']
+        if all(v is not None for v in self.scores):
+            self.scores = np.array(self.scores)
+            self.scores = self.scores / opt['full_score']
 
         if self.file_client is None:
             self.file_client = FileClient(self.io_backend_opt.pop('type'), **self.io_backend_opt)
@@ -73,6 +84,8 @@ class ScoreImageDataset3(data.Dataset):
         img_path = os.path.join(self.dt_folder, self.image_names[index])
         img_data = Image.open(img_path)
         score = self.scores[index]
+        if score is None:
+            score = float('nan')
 
         # augment
         # auto reshape and crop into size

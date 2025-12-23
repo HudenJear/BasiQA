@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import torch, time
 import numpy as np
@@ -124,6 +125,7 @@ class FIQAModel(BaseModel):
         dataset_name = dataloader.dataset.opt['name']
         with_metrics = self.opt['val'].get('metrics') is not None
         use_pbar = self.opt['val'].get('pbar', False)
+        full_score = dataloader.dataset.opt.get('full_score', 1)
 
         if with_metrics:
             if not hasattr(self, 'metric_results'):  # only execute in the first run
@@ -141,6 +143,7 @@ class FIQAModel(BaseModel):
         # method of metric was changed `cause iqa need to compute the srcc and plcc
         metric_data['pred'] = []
         metric_data['gt'] = []
+        gt_all_finite = True
         name_list=[]  # for saving
         for idx, val_data in enumerate(dataloader):
             img_full_name=osp.basename(val_data['img_path'][0])
@@ -149,7 +152,10 @@ class FIQAModel(BaseModel):
             self.feed_data(val_data)
             self.test()
             metric_data['pred'].append(self.output.cpu().numpy())
-            metric_data['gt'].append(self.score.cpu().numpy())
+            score_np = self.score.detach().cpu().numpy()
+            if not np.isfinite(score_np).all():
+                gt_all_finite = False
+            metric_data['gt'].append(score_np)
             # tentative for out of GPU memory
             del self.score
             del self.image
@@ -160,6 +166,9 @@ class FIQAModel(BaseModel):
                 pbar.set_description(f'Test {img_name}')
         metric_data['pred']=np.array(metric_data['pred']).flatten()
         metric_data['gt']=np.array(metric_data['gt']).flatten()
+
+        if not gt_all_finite:
+            with_metrics = False
 
         if with_metrics:
             # calculate metrics
@@ -187,6 +196,43 @@ class FIQAModel(BaseModel):
                 sav_csv=pd.DataFrame(sav_csv)
                 # sav=sav_csv.to_csv(sav_path)
                 sav = csv_write(sav_csv, sav_path)
+
+                try:
+                    vis_dir = osp.join(self.opt['path']['visualization'], dataset_name)
+                    pred_files = [
+                        f for f in os.listdir(vis_dir)
+                        if f.startswith('prediction') and f.endswith('.csv')
+                    ]
+                    pred_dfs = []
+                    for f in pred_files:
+                        df = pd.read_csv(osp.join(vis_dir, f))
+                        cols = [c for c in ['file_name', 'prediction', 'ground_truth'] if c in df.columns]
+                        if 'file_name' in cols and 'prediction' in cols:
+                            pred_dfs.append(df[cols])
+                    if len(pred_dfs) > 0:
+                        all_pred = pd.concat(pred_dfs, ignore_index=True)
+                        if 'ground_truth' not in all_pred.columns:
+                            all_pred['ground_truth'] = np.nan
+
+                        def _first_valid(series):
+                            s = series.dropna()
+                            return s.iloc[0] if len(s) > 0 else np.nan
+
+                        results_df = all_pred.groupby('file_name', as_index=False).agg(
+                            prediction=('prediction', 'mean'),
+                            count=('prediction', 'size'),
+                            ground_truth=('ground_truth', _first_valid)
+                        )
+                        results_df['prediction'] = results_df['prediction'] * full_score
+                        if 'ground_truth' in results_df.columns:
+                            results_df['ground_truth'] = results_df['ground_truth'] * full_score
+                        results_path = osp.join(vis_dir, 'results.csv')
+                        csv_write(results_df, results_path)
+                        logger = get_root_logger()
+                        logger.info(f'Please check averaged results: {results_path}')
+                except Exception as e:
+                    logger = get_root_logger()
+                    logger.warning(f'Failed to generate averaged results.csv: {e}')
         if use_pbar:
             pbar.close()
 
@@ -197,6 +243,10 @@ class FIQAModel(BaseModel):
                 self._update_best_metric_result(dataset_name, metric, self.metric_results[metric], current_iter)
 
             self._log_validation_metric_values(current_iter, dataset_name, tb_logger)
+        else:
+            if not gt_all_finite:
+                logger = get_root_logger()
+                logger.info('Ground truth score is missing (NaN). Skip validation metrics.')
 
     def _log_validation_metric_values(self, current_iter, dataset_name, tb_logger):
         log_str = f'Validation {dataset_name}\n'

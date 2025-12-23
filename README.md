@@ -19,24 +19,34 @@ For a detailed explanation of the architecture and methodology, please refer to 
 
 **Prerequisites:**
 * Python 3.8+ (Recommended.)
-* PyTorch 1.9+ (Recommended, we have test the code on the torch 2.6.)
-* CUDA 11.1+ (If using GPU, according to your torch version.)
+* PyTorch 1.9+ (Recommended; tested with PyTorch 2.6.)
+* CUDA 11.1+ (If using GPU; match your PyTorch build.)
 
 **Steps:**
 
 1.  **Clone the repository:**
     ```bash
-    git clone [https://github.com/HudenJear/BasiQA.git](https://github.com/HudenJear/BasiQA.git)
+    git clone https://github.com/HudenJear/BasiQA.git
     cd BasiQA
     ```
 
 2.  **Install dependencies:**
     ```bash
+    conda create -n basiqa python=3.8
+    conda activate basiqa
+    pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
     pip install -r requirements.txt
     ```
+    If you use a different CUDA version, replace `cu121` accordingly.
     *(See `requirements.txt` for a full list of dependencies). Please install required package if needed.*
 
+3.  **Install SoftPool (required for FTHNet):**
+    Follow the official instructions: https://github.com/alexandrosstergiou/SoftPool
+
 ## Dataset
+
+### Sample dataset (included)
+We provide a small sample dataset in `./datasets/sample_dataset/` for quickly verifying the pipeline.
 
 ### FQS Dataset (Used in Paper)
 The FTHNet model was trained and evaluated on our **Fundus Quality Score (FQS)** dataset.
@@ -52,8 +62,8 @@ To train or test on your own dataset, please format it as follows:
 1.  Create a root directory for your dataset (e.g., `./datasets/xxxxxx`).
 2.  Inside the root directory, create an `images/` subfolder containing all your fundus images.
 3.  Inside the root directory, create a CSV file (e.g., `score.csv`). This file must contain at least two columns:
-    * `image_name`: The relative path to the image within the `images/` subfolder (e.g., `image001.jpg`).
-    * `score`: The continuous quality score for the corresponding image.
+    * `file_name`: The relative path to the image within the `images/` subfolder (e.g., `image001.jpg`).
+    * `meanOpinionScore`: The continuous quality score for the corresponding image.
 
 Update the dataset paths in the relevant `.yml` configuration files under the `./options/`.
 
@@ -62,9 +72,10 @@ Update the dataset paths in the relevant `.yml` configuration files under the `.
 ### Pretrained Model
 
 We provide the pretrained weights for FTHNet trained on the FQS dataset.
-1.  **Download:** Click [here](https://pan.baidu.com/s/1ETr6YCE5U2khSHQ4rl2rkg) to download the checkpoint file (in `./FTHNet`).
+1.  **Download:** Click [here](https://pan.baidu.com/s/1ETr6YCE5U2khSHQ4rl2rkg) to download the checkpoint file.
     * *Baidu Disk Access Code:* `fth1`
-2.  **Setup:** Create a directory named `./pretrained_weights`. Place the downloaded checkpoint file inside `./pretrained_weights/`.
+    * Google Drive: https://drive.google.com/drive/folders/1gXaa77aARo1sdqky3_81JD6ofL17fGUU?usp=sharing
+2.  **Setup:** Place the downloaded checkpoint file inside `./pretrained_weight/`.
 
 ### Testing FTHNet
 
@@ -73,20 +84,18 @@ Ensure the pretrained model and the FQS dataset are downloaded and placed correc
 Execute the following command, replacing `XX` with the desired GPU ID (e.g., `0`):
 
 ```bash
-CUDA_VISIBLE_DEVICES=XX python ./basiqa/test.py -opt ./options/test/IQA/test_hyper.yml
+CUDA_VISIBLE_DEVICES=XX python ./basiqa/test.py -opt ./options/test/test_FTHNet.yml
 ```
 
-The script will load the pretrained model, run inference on the test split of the FQS dataset, and print PLCC, SRCC, R2, L1 to the console. Predicted scores will also be saved in the results directory, which will be created automatically upon first test.
+The script will load the pretrained model, run inference, and print metrics (if ground-truth scores are available). Predictions will be saved under `./results/<exp_name>/visualization/<dataset_name>/`. For multi-run testing, check the averaged file: `results.csv`.
 
 ### Training FTHNet
 You can either fine-tune the provided pretrained model or train from scratch.
 
 To Fine-tune / Train on FQS:
-
 Ensure the FQS dataset is set up. Modify the train_fthnet_std_multi.yml file if you want. Then, specify the path to the pretrained weights like in the test yml file. The `./experiments` directory will be created automatically upon first run, in which you can see the detailed logs and metrics.
 
 ```bash
-
 CUDA_VISIBLE_DEVICES=XX python ./basiqa/train_multi.py -opt ./options/train/IQA/train_fthnet_std_multi.yml
 ```
 
